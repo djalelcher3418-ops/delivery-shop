@@ -1,0 +1,36 @@
+name: delivery_shop
+description: Delivery — تطبيق المحل (نفس قاعدة بيانات الموقع وتطبيقي الزبون والموصّل)
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.4.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+  firebase_core: any
+  firebase_auth: any
+  cloud_firestore: any
+  google_fonts: any
+  geolocator: '>=12.0.0 <15.0.0'
+  url_launcher: any
+  audioplayers: any
+  image_picker: any
+
+dev_dependencies:
+  flutter_launcher_icons: any
+
+flutter_launcher_icons:
+  android: true
+  ios: false
+  image_path: assets/icon.png
+  adaptive_icon_background: '#E8890C'
+  adaptive_icon_foreground: assets/icon_fg.png
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/alert.wav
