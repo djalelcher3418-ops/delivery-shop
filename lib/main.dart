@@ -8,6 +8,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'notify.dart';
 import 'screens/login.dart';
 import 'screens/shell.dart';
+import 'status_bar.dart';
 import 'store.dart';
 import 'ui.dart';
 
@@ -27,6 +28,7 @@ final navKey = GlobalKey<NavigatorState>();
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(options: firebaseOptions);
+  status.start();
   app.onToast = (m) {
     final s = messengerKey.currentState;
     if (s == null) return;
@@ -91,6 +93,7 @@ class ShopApp extends StatelessWidget {
       title: 'Delivery محل',
       debugShowCheckedModeBanner: false,
       scaffoldMessengerKey: messengerKey,
+      builder: (context, child) => StatusBars(child: child ?? const SizedBox.shrink()),
       navigatorKey: navKey,
       locale: const Locale('ar'),
       supportedLocales: const [Locale('ar')],
