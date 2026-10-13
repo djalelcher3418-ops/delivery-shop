@@ -51,6 +51,38 @@ for g in ['android/app/build.gradle.kts', 'android/app/build.gradle']:
 
     print(t)
 
+# ---- توقيع ثابت: يقرأ android/key.properties (يكتبه البناء على GitHub) ويوقّع النسخة به ----
+g = 'android/app/build.gradle.kts'
+t = open(g, encoding='utf-8').read()
+if 'keyProps' not in t:
+    t = 'import java.util.Properties\n\n' + t
+    t = t.replace('\nandroid {', '''
+val keyProps = Properties().apply {
+    val f = rootProject.file("key.properties")
+    if (f.exists()) f.inputStream().use { load(it) }
+}
+
+android {''', 1)
+    t, n = re.subn(r'\n([ \t]*)buildTypes\s*\{', r'''
+\1signingConfigs {
+\1    create("release") {
+\1        if (!keyProps.isEmpty()) {
+\1            storeFile = file(keyProps.getProperty("storeFile"))
+\1            storePassword = keyProps.getProperty("storePassword")
+\1            keyAlias = keyProps.getProperty("keyAlias")
+\1            keyPassword = keyProps.getProperty("keyPassword")
+\1        }
+\1    }
+\1}
+
+\1buildTypes {''', t, count=1)
+    assert n == 1, 'buildTypes not found'
+    t, n = re.subn(r'signingConfig\s*=\s*signingConfigs\.getByName\("debug"\)',
+                   'signingConfig = signingConfigs.getByName(if (keyProps.isEmpty()) "debug" else "release")', t, count=1)
+    assert n == 1, 'debug signingConfig not found'
+    open(g, 'w', encoding='utf-8').write(t)
+    print(t)
+
 # the default widget test refers to a counter app that does not exist here
 if os.path.isdir('test'):
     shutil.rmtree('test')

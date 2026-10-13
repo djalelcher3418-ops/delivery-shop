@@ -31,6 +31,21 @@ jobs:
       - name: Configure Android (permissions, name, minSdk)
         run: python3 .github/scripts/patch_android.py
 
+      # مفتاح توقيع ثابت: بدونه يرفض الهاتف تثبيت التحديث فوق النسخة المثبتة
+      - name: Release signing key
+        env:
+          SIGNING_PASS: ${{ secrets.SIGNING_PASS }}
+        run: |
+          if [ -n "$SIGNING_PASS" ]; then
+            openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 -in .github/signing/release.jks.enc -out android/app/release.jks -pass env:SIGNING_PASS
+            P="$SIGNING_PASS"
+          else
+            echo "::warning::السر SIGNING_PASS غير موجود: وُقّعت النسخة بمفتاح مؤقت فلن تُثبَّت فوق نسخة سابقة"
+            P="temp-$RANDOM$RANDOM$RANDOM"
+            keytool -genkeypair -keystore android/app/release.jks -storetype PKCS12 -alias delivery -keyalg RSA -keysize 2048 -validity 60 -storepass "$P" -keypass "$P" -dname "CN=Temporary"
+          fi
+          printf 'storeFile=release.jks\nstorePassword=%s\nkeyAlias=delivery\nkeyPassword=%s\n' "$P" "$P" > android/key.properties
+
       - name: Get packages
         run: flutter pub get
 
@@ -38,7 +53,7 @@ jobs:
         run: dart run flutter_launcher_icons
 
       - name: Build APK
-        run: flutter build apk --release --dart-define=BUILD=${{ github.run_number }}
+        run: flutter build apk --release --dart-define=BUILD=${{ github.run_number }} --build-number=${{ github.run_number }}
 
       - name: Rename APK
         run: cp build/app/outputs/flutter-apk/app-release.apk Shop-${{ github.run_number }}.apk
