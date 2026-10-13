@@ -61,8 +61,21 @@ class Thumb64 extends StatelessWidget {
   }
 }
 
-class ProductsScreen extends StatelessWidget {
+class ProductsScreen extends StatefulWidget {
   const ProductsScreen({super.key});
+  @override
+  State<ProductsScreen> createState() => _ProductsScreenState();
+}
+
+class _ProductsScreenState extends State<ProductsScreen> {
+  final search = TextEditingController();
+  String filter = 'all'; // all | on | off
+
+  @override
+  void dispose() {
+    search.dispose();
+    super.dispose();
+  }
 
   void _edit(BuildContext context, [Doc? p]) =>
       Navigator.of(context).push(MaterialPageRoute(builder: (_) => ProductEditScreen(product: p)));
@@ -70,11 +83,34 @@ class ProductsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
-      listenable: app,
+      listenable: Listenable.merge([app, search]),
       builder: (context, _) {
         final prods = app.products;
         final n = prods.where((p) => p['available'] == true).length;
         final hint = Theme.of(context).hintColor;
+        final q = latinDigits(search.text.trim().toLowerCase());
+        final shown = prods.where((p) {
+          if (filter == 'on' && p['available'] != true) return false;
+          if (filter == 'off' && p['available'] == true) return false;
+          if (q.isEmpty) return true;
+          return '${p['name'] ?? ''} ${p['section'] ?? ''}'.toLowerCase().contains(q);
+        }).toList();
+        // المنتجات مرتبة حسب القسم، فنضع عنوان القسم قبل أول منتج منه
+        final rows = <Widget>[];
+        String? sec;
+        for (final p in shown) {
+          final ps = '${p['section'] ?? ''}';
+          if (ps != sec) {
+            sec = ps;
+            final count = shown.where((x) => '${x['section'] ?? ''}' == ps).length;
+            rows.add(Padding(
+              padding: const EdgeInsets.fromLTRB(4, 10, 4, 6),
+              child: Text('${ps.isEmpty ? 'بدون قسم' : ps} ($count)',
+                  style: TextStyle(color: hint, fontWeight: FontWeight.w700, fontSize: 13)),
+            ));
+          }
+          rows.add(_ProductRow(p: p, onTap: () => _edit(context, p)));
+        }
         return Scaffold(
           floatingActionButton: FloatingActionButton.extended(
             onPressed: () => _edit(context),
@@ -91,6 +127,29 @@ class ProductsScreen extends StatelessWidget {
                 Text('اضغط على المنتج لتعديل سعره أو صورته. أوقف المنتج الذي نفد ليظهر للزبون «نفد حالياً».',
                     style: TextStyle(color: hint, fontSize: 13)),
                 const SizedBox(height: 12),
+                if (prods.length > 5) ...[
+                  TextField(
+                    controller: search,
+                    textInputAction: TextInputAction.search,
+                    decoration: InputDecoration(
+                      hintText: 'ابحث عن منتج أو قسم',
+                      prefixIcon: const Icon(Icons.search_rounded),
+                      suffixIcon: search.text.isEmpty
+                          ? null
+                          : IconButton(tooltip: 'مسح', onPressed: search.clear, icon: const Icon(Icons.close_rounded)),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Wrap(spacing: 8, children: [
+                    for (final f in [('all', 'الكل (${prods.length})'), ('on', 'متوفر ($n)'), ('off', 'نفد (${prods.length - n})')])
+                      ChoiceChip(
+                        label: Text(f.$2),
+                        selected: filter == f.$1,
+                        onSelected: (_) => setState(() => filter = f.$1),
+                      ),
+                  ]),
+                  const SizedBox(height: 4),
+                ],
                 if (!app.loadedProducts)
                   const Padding(padding: EdgeInsets.all(30), child: Center(child: CircularProgressIndicator()))
                 else if (prods.isEmpty)
@@ -98,36 +157,48 @@ class ProductsScreen extends StatelessWidget {
                       icon: Icons.inventory_2_rounded,
                       title: 'لم تضف منتجات بعد',
                       text: 'أضف أول منتج ليظهر محلك للزبائن مع قائمته.')
+                else if (shown.isEmpty)
+                  const EmptyState(icon: Icons.search_off_rounded, title: 'لا توجد منتجات بهذا البحث')
                 else
-                  for (final p in prods)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 8),
-                      child: Box(
-                        padding: const EdgeInsets.all(10),
-                        onTap: () => _edit(context, p),
-                        child: Row(children: [
-                          Opacity(opacity: p['available'] == true ? 1 : 0.5, child: Thumb64(app.productImage(p))),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                              Text('${p['name'] ?? ''}',
-                                  style: TextStyle(fontWeight: FontWeight.w700, color: p['available'] == true ? null : hint)),
-                              Text(
-                                '${optList(p['sizes']).isNotEmpty ? 'من ' : ''}${money(basePrice(p))} · ${p['section'] ?? ''} · '
-                                '${p['available'] == true ? 'متوفر' : 'نفد'}${hasOpts(p) ? ' · بخيارات' : ''}',
-                                style: TextStyle(color: hint, fontSize: 12),
-                              ),
-                            ]),
-                          ),
-                          Switch(value: p['available'] == true, onChanged: (_) => app.toggleProduct(p)),
-                        ]),
-                      ),
-                    ),
+                  ...rows,
               ]),
             ),
           ]),
         );
       },
+    );
+  }
+}
+
+class _ProductRow extends StatelessWidget {
+  final Doc p;
+  final VoidCallback onTap;
+  const _ProductRow({required this.p, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final hint = Theme.of(context).hintColor;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Box(
+        padding: const EdgeInsets.all(10),
+        onTap: onTap,
+        child: Row(children: [
+          Opacity(opacity: p['available'] == true ? 1 : 0.5, child: Thumb64(app.productImage(p))),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text('${p['name'] ?? ''}', style: TextStyle(fontWeight: FontWeight.w700, color: p['available'] == true ? null : hint)),
+              Text(
+                '${optList(p['sizes']).isNotEmpty ? 'من ' : ''}${money(basePrice(p))} · '
+                '${p['available'] == true ? 'متوفر' : 'نفد'}${hasOpts(p) ? ' · بخيارات' : ''}',
+                style: TextStyle(color: hint, fontSize: 12),
+              ),
+            ]),
+          ),
+          Switch(value: p['available'] == true, onChanged: (_) => app.toggleProduct(p)),
+        ]),
+      ),
     );
   }
 }
