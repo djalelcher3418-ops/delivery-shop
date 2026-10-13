@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../store.dart';
@@ -12,6 +14,21 @@ class OrdersScreen extends StatefulWidget {
 
 class _OrdersScreenState extends State<OrdersScreen> {
   String tab = 'new';
+  Timer? _clock; // يحدّث العدّ التنازلي للتحضير
+
+  @override
+  void initState() {
+    super.initState();
+    _clock = Timer.periodic(const Duration(seconds: 30), (_) {
+      if (mounted) setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    _clock?.cancel();
+    super.dispose();
+  }
 
   static const tabs = [('new', 'جديدة'), ('prep', 'تحضير'), ('ready', 'جاهزة'), ('hist', 'السجل')];
   static const empty = {
@@ -168,11 +185,27 @@ class _OrderCardState extends State<_OrderCard> {
         ),
       ]);
     } else if (st == 'prep') {
-      action = FilledButton(
-        style: FilledButton.styleFrom(backgroundColor: orange),
-        onPressed: busy ? null : () => _run(() => app.markReady(id)),
-        child: const Text('الطلب جاهز للموصّل'),
-      );
+      action = Row(children: [
+        Expanded(
+          flex: 3,
+          child: FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: orange),
+            onPressed: busy ? null : () => _run(() => app.markReady(id)),
+            child: const Text('الطلب جاهز للموصّل'),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Tooltip(
+            message: 'أحتاج 10 دقائق إضافية',
+            child: OutlinedButton(
+              style: OutlinedButton.styleFrom(minimumSize: const Size(0, 54), padding: EdgeInsets.zero),
+              onPressed: busy ? null : () => _run(() => app.delay(o)),
+              child: const Text('+10 د', textDirection: TextDirection.rtl),
+            ),
+          ),
+        ),
+      ]);
     } else if (st == 'ready') {
       action = FilledButton(
         style: FilledButton.styleFrom(backgroundColor: info),
@@ -196,6 +229,10 @@ class _OrderCardState extends State<_OrderCard> {
             if (widget.showStatus) ...[statusPill(o), const SizedBox(width: 8)],
             Text(ago(asInt(o['createdAtMs'])), style: TextStyle(color: hint, fontSize: 12)),
           ]),
+          if (app.prepLeft(o) != null) ...[
+            const SizedBox(height: 6),
+            Align(alignment: AlignmentDirectional.centerStart, child: _prepPill(app.prepLeft(o)!)),
+          ],
           if (o['scheduledFor'] != null) ...[
             const SizedBox(height: 6),
             Align(
@@ -236,4 +273,13 @@ class _OrderCardState extends State<_OrderCard> {
       ),
     );
   }
+}
+
+/// العدّ التنازلي لتحضير الطلب، بأيقونة ونص حتى لا يعتمد على اللون وحده
+Widget _prepPill(int left) {
+  if (left > 0) {
+    return Pill('يجهز خلال $left د', bg: const Color(0xFFE3ECF7), fg: info, icon: Icons.timer_outlined);
+  }
+  if (left == 0) return const Pill('حان وقت جاهزيته', bg: Color(0xFFFFF1DC), fg: Color(0xFF8A4B00), icon: Icons.timer_rounded);
+  return Pill('متأخر ${-left} د · الزبون ينتظر', bg: const Color(0xFFFCE4E4), fg: const Color(0xFF9A1C1C), icon: Icons.warning_amber_rounded);
 }

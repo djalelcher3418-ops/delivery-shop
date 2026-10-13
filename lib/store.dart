@@ -515,6 +515,38 @@ class ShopState extends ChangeNotifier {
       {'dispatch': 'searching', 'offerTo': null, 'offerAt': null, 'declined': [], 'prepAt': nowMs()});
   Future<bool> reject(String id) => setStatus(id, 'rejected', 'رُفض الطلب');
   Future<bool> markReady(String id) => setStatus(id, 'ready', 'الطلب جاهز، في انتظار الموصّل');
+  /// كم دقيقة بقيت على جاهزية طلب قيد التحضير (سالب = متأخر). null إذا لم يبدأ التحضير.
+  int? prepLeft(Doc o) {
+    if (o['status'] != 'prep' || o['prepAt'] == null) return null;
+    final s = shop;
+    final prep = s != null && asInt(s['prepMin']) > 0 ? asInt(s['prepMin']) : 15;
+    return ((asInt(o['prepAt']) + prep * 60000 - nowMs()) / 60000).ceil();
+  }
+
+  /// يؤخر وقت الجاهزية 10 دقائق. يرى الزبون وقت الوصول الجديد مباشرة،
+  /// لأن تطبيقه يحسبه من وقت بدء التحضير (prepAt).
+  Future<bool> delay(Doc o) async {
+    final left = prepLeft(o) ?? 0;
+    if (left > 45) {
+      toast('الطلب متأخر كثيراً. اتصل بالزبون أو بالإدارة.');
+      return false;
+    }
+    final base = math.max(asInt(o['prepAt'] ?? nowMs()), left < 0 ? nowMs() - _prepMs() : 0);
+    try {
+      await fs.collection('orders').doc(o['id']).update({'prepAt': base + 10 * 60000, 'updatedAt': FieldValue.serverTimestamp()});
+      toast('أُبلغ الزبون أن طلبه يحتاج 10 دقائق إضافية');
+      return true;
+    } catch (e) {
+      toast(errText(e));
+      return false;
+    }
+  }
+
+  int _prepMs() {
+    final s = shop;
+    return (s != null && asInt(s['prepMin']) > 0 ? asInt(s['prepMin']) : 15) * 60000;
+  }
+
   Future<bool> handed(String id) => setStatus(id, 'road', 'سُلّم الطلب للموصّل', {'pickedAt': nowMs()});
 
   // ---------------- shop actions ----------------
