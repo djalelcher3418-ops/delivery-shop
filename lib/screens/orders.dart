@@ -130,16 +130,27 @@ class _OrderCardState extends State<_OrderCard> {
   Widget _dispatch(Doc o) {
     if (o['courierUid'] != null) {
       final ph = '${o['courierPhone'] ?? ''}';
+      final near = ['prep', 'ready'].contains(o['status']) ? app.courierNear(o) : null;
       return InkWell(
         onTap: ph.isEmpty ? null : () => callPhone(ph),
-        child: Row(children: [
-          const Icon(Icons.delivery_dining_rounded, color: info, size: 18),
-          const SizedBox(width: 6),
-          Expanded(
-            child: Text('الموصّل: ${o['courierName'] ?? ''}${ph.isEmpty ? '' : ' · $ph'}',
-                style: const TextStyle(color: info, fontWeight: FontWeight.w600)),
-          ),
-          if (ph.isNotEmpty) const Icon(Icons.call_rounded, color: info, size: 18),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            const Icon(Icons.delivery_dining_rounded, color: info, size: 18),
+            const SizedBox(width: 6),
+            Expanded(
+              child: Text('الموصّل: ${o['courierName'] ?? ''}${ph.isEmpty ? '' : ' · $ph'}',
+                  style: const TextStyle(color: info, fontWeight: FontWeight.w600)),
+            ),
+            if (ph.isNotEmpty) const Icon(Icons.call_rounded, color: info, size: 18),
+          ]),
+          if (near != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: near.km <= arriveKm
+                  ? const Pill('وصل إلى المحل', bg: Color(0xFFE2F1EA), fg: Color(0xFF0A5A41), icon: Icons.storefront_rounded)
+                  : Pill('على بعد ${kmText(near.km)} · يصل خلال ~${near.min} د',
+                      bg: const Color(0xFFE3ECF7), fg: info, icon: Icons.near_me_rounded),
+            ),
         ]),
       );
     }

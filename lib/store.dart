@@ -17,6 +17,7 @@ typedef Doc = Map<String, dynamic>;
 final ShopState app = ShopState();
 
 const loginDomain = 'delivery-dz.com';
+const arriveKm = 0.15; // الموصّل على بعد 150 م أو أقل = وصل إلى المحل
 const offerMs = 60000; // مدة عرض الطلب على الموصّل قبل الانتقال للذي بعده
 const freshMs = 3 * 60000; // الموصّل "متصل فعلاً" إذا وصل موقعه خلال آخر 3 دقائق
 const retryMs = 2 * 60000; // إذا رفض الجميع: يُعاد العرض على الأقرب بعد دقيقتين
@@ -85,6 +86,8 @@ int startOfToday() {
   final n = DateTime.now();
   return DateTime(n.year, n.month, n.day).millisecondsSinceEpoch;
 }
+
+String kmText(double d) => d < 1 ? '${(d * 1000).round()} م' : '${d.toStringAsFixed(1)} كم';
 
 double? km(double? aLat, double? aLng, double? bLat, double? bLng) {
   if (aLat == null || aLng == null || bLat == null || bLng == null) return null;
@@ -203,6 +206,7 @@ class ShopState extends ChangeNotifier {
   final Map<String, String?> images = {}; // id:v -> data url (null = none)
   final Set<String> _newNotified = {}; // طلبات جديدة ظهر لها إشعار
   final Map<String, String> _dispatchSeen = {};
+  final Set<String> _arrived = {}; // طلبات وصل موصّلها إلى المحل ونُبّه لها
   void Function(String msg)? onToast;
 
   void toast(String m) => onToast?.call(m);
@@ -341,6 +345,18 @@ class ShopState extends ChangeNotifier {
             'سيُعرض تلقائياً على أول موصّل يتصل.', 'order:$id');
       }
     }
+    // الموصّل وصل إلى المحل
+    for (final o in orders) {
+      final id = '${o['id']}';
+      if (!['prep', 'ready'].contains(o['status']) || o['courierUid'] == null) continue;
+      final c = courierNear(o);
+      if (c == null || c.km > arriveKm || !_arrived.add(id)) continue;
+      if (first) continue;
+      final msg = '${o['courierName'] ?? 'الموصّل'} وصل لاستلام الطلب ${o['no'] ?? ''}';
+      toast(msg);
+      _beep();
+      notify.update('arrive:$id', 'الموصّل عند المحل', msg, 'order:$id');
+    }
     for (final id in _newNotified.where((x) => !stillNew.contains(x)).toList()) {
       _newNotified.remove(id);
       notify.cancelOrder(id);
@@ -398,7 +414,24 @@ class ShopState extends ChangeNotifier {
     return image('cover_${s['id']}', s['hasCover'] == true, s['coverV']);
   }
 
+  /// بُعد الموصّل المعيَّن عن المحل ووقت وصوله التقريبي، من آخر موقع كتبه على الطلب (خلال 3 دقائق)
+  ({double km, int min})? courierNear(Doc o) {
+    if (o['courierUid'] == null || o['cAt'] == null || nowMs() - asInt(o['cAt']) > 3 * 60000) return null;
+    final s = shop;
+    final d = km(asD(s?['lat']), asD(s?['lng']), asD(o['cLat']), asD(o['cLng']));
+    if (d == null) return null;
+    return (km: d, min: math.max(1, (d / 0.33 * 1.3).round()));
+  }
+
   // ---------------- alerts ----------------
+  Future<void> _beep() async {
+    try {
+      await _player.stop();
+      await _player.play(AssetSource('alert.wav'));
+    } catch (_) {}
+    HapticFeedback.mediumImpact();
+  }
+
   Future<void> _ring() async {
     if (role != 'shop' || newCount == 0) return;
     try {
