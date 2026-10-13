@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import 'notify.dart';
 import 'screens/login.dart';
 import 'screens/shell.dart';
 import 'store.dart';
@@ -21,6 +22,7 @@ const firebaseOptions = FirebaseOptions(
 );
 
 final messengerKey = GlobalKey<ScaffoldMessengerState>();
+final navKey = GlobalKey<NavigatorState>();
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -31,6 +33,11 @@ Future<void> main() async {
     s.hideCurrentSnackBar();
     s.showSnackBar(SnackBar(content: Text(m), behavior: SnackBarBehavior.floating));
   };
+  notify.onOpen = (_) {
+    navKey.currentState?.popUntil((r) => r.isFirst);
+    shopTab.value = 0; // تبويب الطلبات
+  };
+  await notify.init();
   await app.init();
   runApp(const ShopApp());
 }
@@ -84,6 +91,7 @@ class ShopApp extends StatelessWidget {
       title: 'Delivery محل',
       debugShowCheckedModeBanner: false,
       scaffoldMessengerKey: messengerKey,
+      navigatorKey: navKey,
       locale: const Locale('ar'),
       supportedLocales: const [Locale('ar')],
       localizationsDelegates: const [

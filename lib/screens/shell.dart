@@ -5,7 +5,11 @@ import '../ui.dart';
 import 'coupons.dart';
 import 'orders.dart';
 import 'products.dart';
+import 'sales.dart';
 import 'settings.dart';
+
+/// التبويب الحالي (يغيّره الضغط على إشعار طلب جديد)
+final ValueNotifier<int> shopTab = ValueNotifier<int>(0);
 
 class Shell extends StatefulWidget {
   const Shell({super.key});
@@ -14,31 +18,34 @@ class Shell extends StatefulWidget {
 }
 
 class _ShellState extends State<Shell> {
-  int tab = 0;
+  int get tab => shopTab.value;
 
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
-      listenable: app,
+      listenable: Listenable.merge([app, shopTab]),
       builder: (context, _) {
         final n = app.newCount;
         if (app.shop == null) return const Scaffold(body: Center(child: CircularProgressIndicator()));
         return Scaffold(
           body: IndexedStack(index: tab, children: [
             const OrdersScreen(),
+            const SalesScreen(),
             const ProductsScreen(),
             const CouponsScreen(),
             SettingsScreen(key: ValueKey(app.shopId)),
           ]),
           bottomNavigationBar: NavigationBar(
             selectedIndex: tab,
-            onDestinationSelected: (i) => setState(() => tab = i),
+            onDestinationSelected: (i) => shopTab.value = i,
             destinations: [
               NavigationDestination(
                 icon: Badge(isLabelVisible: n > 0, label: Text('$n'), child: const Icon(Icons.receipt_long_outlined)),
                 selectedIcon: Badge(isLabelVisible: n > 0, label: Text('$n'), child: const Icon(Icons.receipt_long_rounded)),
                 label: 'الطلبات',
               ),
+              const NavigationDestination(
+                  icon: Icon(Icons.bar_chart_outlined), selectedIcon: Icon(Icons.bar_chart_rounded), label: 'المبيعات'),
               const NavigationDestination(
                   icon: Icon(Icons.inventory_2_outlined), selectedIcon: Icon(Icons.inventory_2_rounded), label: 'منتجاتي'),
               const NavigationDestination(

@@ -2,7 +2,6 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
-import 'dart:typed_data';
 
 import 'package:audioplayers/audioplayers.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -10,6 +9,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:geolocator/geolocator.dart';
+
+import 'notify.dart';
 
 typedef Doc = Map<String, dynamic>;
 
@@ -200,6 +201,8 @@ class ShopState extends ChangeNotifier {
   final Map<String, bool> _inflight = {};
   final Map<String, int> _dispSeen = {};
   final Map<String, String?> images = {}; // id:v -> data url (null = none)
+  final Set<String> _newNotified = {}; // طلبات جديدة ظهر لها إشعار
+  final Map<String, String> _dispatchSeen = {};
   void Function(String msg)? onToast;
 
   void toast(String m) => onToast?.call(m);
@@ -273,6 +276,7 @@ class ShopState extends ChangeNotifier {
 
   void _startShop() {
     final sid = shopId!;
+    notify.requestPermission();
     _subs.add(fs.collection('shops').snapshots().listen((s) {
       shops = s.docs.map(_doc).toList();
       final me = shop;
@@ -311,10 +315,36 @@ class ShopState extends ChangeNotifier {
         final fresh = s.docChanges.where((c) => c.type == DocumentChangeType.added && c.doc.data()?['status'] == 'new').length;
         if (fresh > 0) toast(fresh > 1 ? 'وصلت $fresh طلبات جديدة' : 'طلب جديد وصل إلى محلك');
       }
+      _notifyOrders(first);
       first = false;
       _ring();
       notifyListeners();
     }, onError: (e) => toast(errText(e))));
+  }
+
+  // إشعارات الهاتف (تظهر والتطبيق في الخلفية فقط)
+  void _notifyOrders(bool first) {
+    final stillNew = <String>{};
+    for (final o in orders) {
+      final id = '${o['id']}';
+      if (o['status'] == 'new') {
+        stillNew.add(id);
+        if (_newNotified.add(id) && !first) {
+          notify.newOrder(id, 'طلب جديد · ${money(shopDue(o))}',
+              '${itemsOf(o).map((i) => '${asInt(i['qty'])}× ${i['name'] ?? ''}').join('، ')} · اضغط لتقبله');
+        }
+      }
+      final d = '${o['dispatch'] ?? ''}', was = _dispatchSeen[id];
+      _dispatchSeen[id] = d;
+      if (!first && was != null && was != 'none' && d == 'none' && o['courierUid'] == null) {
+        notify.update('nocourier:$id', 'لا يوجد موصّل متاح · طلب ${o['no'] ?? ''}',
+            'سيُعرض تلقائياً على أول موصّل يتصل.', 'order:$id');
+      }
+    }
+    for (final id in _newNotified.where((x) => !stillNew.contains(x)).toList()) {
+      _newNotified.remove(id);
+      notify.cancelOrder(id);
+    }
   }
 
   // ---------------- derived ----------------
