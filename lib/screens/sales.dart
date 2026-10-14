@@ -73,6 +73,19 @@ class SalesScreen extends StatelessWidget {
         final best = top.entries.toList()..sort((a, b) => b.value.qty.compareTo(a.value.qty));
         final pending = app.orders.where((o) => o['status'] == 'done' && o['settled'] == false).toList();
 
+        // الزبائن: من طلب في آخر 30 يوماً، وهل كانت تلك أول مرة يطلب فيها من المحل
+        final firstAt = <String, int>{};
+        final active = <String>{};
+        for (final o in app.orders) {
+          final uid = '${o['customerUid'] ?? ''}';
+          if (uid.isEmpty || !_sold(o)) continue;
+          final at = asInt(o['createdAtMs']);
+          firstAt[uid] = firstAt.containsKey(uid) ? (at < firstAt[uid]! ? at : firstAt[uid]!) : at;
+          if (at >= t30) active.add(uid);
+        }
+        final newCust = active.where((u) => firstAt[u]! >= t30).length;
+        final returning = active.length - newCust;
+
         return ListView(padding: EdgeInsets.zero, children: [
           const ShopHeader(title: 'المبيعات'),
           Padding(
@@ -85,6 +98,11 @@ class SalesScreen extends StatelessWidget {
                   _Tile('اليوم', money(dues[6]), ordersText(counts[6])),
                   const SizedBox(width: 10),
                   _Tile('آخر 7 أيام', money(weekDue), weekN > 0 ? 'متوسط الطلب ${money(weekDue / weekN)}' : ordersText(0)),
+                ]),
+                const SizedBox(height: 10),
+                Row(children: [
+                  _Tile('زبائن آخر 30 يوماً', '${active.length}',
+                      active.isEmpty ? 'لا زبائن بعد' : '$newCust جدد · $returning عادوا للطلب'),
                 ]),
                 const SizedBox(height: 12),
                 Box(child: _WeekChart(days: days, values: dues, counts: counts)),
