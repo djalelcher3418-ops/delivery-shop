@@ -6,6 +6,7 @@ import 'dart:io';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 /// رقم هذه النسخة، يمرّره البناء على GitHub (--dart-define=BUILD=رقم البناء). 0 = بناء محلي.
@@ -20,6 +21,38 @@ class AppStatus extends ChangeNotifier {
   String? newUrl;
   bool updateDismissed = false;
 
+  /// الإعفاء من تحسين البطارية: بدونه يقطع الهاتف الشبكة عن التطبيق في الخلفية فلا تصل التنبيهات
+  static const _battery = MethodChannel('dz.delivery/battery');
+  bool batteryOk = true, batteryDismissed = false;
+
+  /// يحددها كل تطبيق: متى يحتاج العمل في الخلفية (الموصّل متصل، المحل مفتوح، للزبون طلب جارٍ)
+  bool Function()? batteryRelevant;
+
+  /// حالة التطبيق التي يتغير معها batteryRelevant، ليتحدّث الشريط
+  Listenable? watch;
+
+  bool get showBattery => !batteryOk && !batteryDismissed && (batteryRelevant?.call() ?? false);
+
+  Future<void> checkBattery() async {
+    try {
+      batteryOk = await _battery.invokeMethod<bool>('isIgnoring') ?? true;
+    } catch (_) {
+      batteryOk = true; // هاتف لا يدعمها: لا نزعج المستخدم
+    }
+    notifyListeners();
+  }
+
+  Future<void> fixBattery() async {
+    try {
+      await _battery.invokeMethod('request');
+    } catch (_) {}
+  }
+
+  void dismissBattery() {
+    batteryDismissed = true;
+    notifyListeners();
+  }
+
   StreamSubscription? _net;
   Timer? _offTimer;
   int _lastCheck = 0;
@@ -28,7 +61,11 @@ class AppStatus extends ChangeNotifier {
     FirebaseAuth.instance.authStateChanges().listen((_) => _watchNet());
     _watchNet();
     checkUpdate();
-    AppLifecycleListener(onResume: checkUpdate);
+    checkBattery();
+    AppLifecycleListener(onResume: () {
+      checkUpdate();
+      checkBattery(); // بعد الرجوع من شاشة الإذن
+    });
   }
 
   // Firestore يعلّم اللقطة بأنها «من الذاكرة» عندما ينقطع الاتصال بالخادم
@@ -95,10 +132,11 @@ class StatusBars extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
-      listenable: status,
+      listenable: Listenable.merge([status, if (status.watch != null) status.watch!]),
       builder: (context, _) {
         final showUpdate = status.newBuild != null && !status.updateDismissed;
-        if (!status.offline && !showUpdate) return child;
+        final showBattery = status.showBattery;
+        if (!status.offline && !showUpdate && !showBattery) return child;
         // الشريطان يدفعان الصفحة إلى الأسفل بدل أن يغطّيا رأسها (وفيه مفاتيح مهمة)
         final mq = MediaQuery.of(context);
         return ColoredBox(
@@ -113,7 +151,18 @@ class StatusBars extends StatelessWidget {
                     icon: Icons.wifi_off_rounded,
                     text: 'لا يوجد اتصال بالإنترنت · لن تصل الطلبات والتحديثات حتى يعود',
                   ),
-                if (status.offline && showUpdate) const SizedBox(height: 6),
+                if (showBattery) ...[
+                  if (status.offline) const SizedBox(height: 6),
+                  _Bar(
+                    color: const Color(0xFF8A4B00),
+                    icon: Icons.battery_alert_rounded,
+                    text: 'اسمح للتطبيق بالعمل في الخلفية لتصلك التنبيهات والشاشة مطفأة',
+                    action: 'سماح',
+                    onAction: status.fixBattery,
+                    onClose: status.dismissBattery,
+                  ),
+                ],
+                if ((status.offline || showBattery) && showUpdate) const SizedBox(height: 6),
                 if (showUpdate)
                   _Bar(
                     color: const Color(0xFF1D4E89),

@@ -15,6 +15,8 @@ perms = [
     'android.permission.VIBRATE',
     # الطلب الجديد يضيء الشاشة ويظهر فوق القفل مثل المكالمة
     'android.permission.USE_FULL_SCREEN_INTENT',
+    # الإعفاء من تحسين البطارية: بدونه يقطع الهاتف الشبكة عن التطبيق في الخلفية
+    'android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS',
 ]
 add = ''.join(f'    <uses-permission android:name="{p}"/>\n' for p in perms if p not in s)
 s = s.replace('<application', add + '    <application', 1)
@@ -82,6 +84,47 @@ android {''', 1)
     assert n == 1, 'debug signingConfig not found'
     open(g, 'w', encoding='utf-8').write(t)
     print(t)
+
+# ---- قناة «battery»: يطلب التطبيق إعفاءه من تحسين البطارية حتى لا يقطع الهاتف عنه الشبكة في الخلفية ----
+import glob
+acts = glob.glob('android/app/src/main/kotlin/**/MainActivity.kt', recursive=True)
+assert len(acts) == 1, acts
+pkg = re.search(r'^package\s+([\w.]+)', open(acts[0], encoding='utf-8').read(), re.M).group(1)
+open(acts[0], 'w', encoding='utf-8').write(f'''package {pkg}
+
+import android.content.Intent
+import android.net.Uri
+import android.os.PowerManager
+import android.provider.Settings
+import io.flutter.embedding.android.FlutterActivity
+import io.flutter.embedding.engine.FlutterEngine
+import io.flutter.plugin.common.MethodChannel
+
+class MainActivity : FlutterActivity() {{
+    override fun configureFlutterEngine(flutterEngine: FlutterEngine) {{
+        super.configureFlutterEngine(flutterEngine)
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "dz.delivery/battery").setMethodCallHandler {{ call, result ->
+            val pm = getSystemService(POWER_SERVICE) as PowerManager
+            when (call.method) {{
+                "isIgnoring" -> result.success(pm.isIgnoringBatteryOptimizations(packageName))
+                "request" -> try {{
+                    startActivity(Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:$packageName")))
+                    result.success(true)
+                }} catch (e: Exception) {{
+                    try {{
+                        startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
+                        result.success(true)
+                    }} catch (e2: Exception) {{
+                        result.success(false)
+                    }}
+                }}
+                else -> result.notImplemented()
+            }}
+        }}
+    }}
+}}
+''')
+print('wrote', acts[0])
 
 # the default widget test refers to a counter app that does not exist here
 if os.path.isdir('test'):
