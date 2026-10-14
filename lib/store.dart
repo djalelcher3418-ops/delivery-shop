@@ -58,6 +58,21 @@ String fmt(num n) {
   return b.toString();
 }
 
+
+/// كتابة في Firestore: تُحفظ في الهاتف فوراً وتظهر في الشاشة، ثم تُرسل حين يتوفر الاتصال.
+/// لا ننتظر رد الخادم أكثر من 8 ثوانٍ حتى لا تعلق الأزرار مع الشبكة الضعيفة.
+/// ترجع true إذا أكّد الخادم، و false إذا بقيت تنتظر الاتصال.
+Future<bool> queued(Future<void> write) async {
+  try {
+    await write.timeout(const Duration(seconds: 8));
+    return true;
+  } on TimeoutException {
+    return false;
+  }
+}
+
+const pendingNote = 'سيُرسل عند عودة الاتصال';
+
 String money(num n) => '${fmt(n)} دج';
 String two(int n) => n.toString().padLeft(2, '0');
 String clock(int ms) {
@@ -207,6 +222,7 @@ class ShopState extends ChangeNotifier {
   final Set<String> _newNotified = {}; // طلبات جديدة ظهر لها إشعار
   final Map<String, String> _dispatchSeen = {};
   final Set<String> _arrived = {}; // طلبات وصل موصّلها إلى المحل ونُبّه لها
+  final Map<String, String> _statusSeen = {};
   void Function(String msg)? onToast;
 
   void toast(String m) => onToast?.call(m);
@@ -344,6 +360,17 @@ class ShopState extends ChangeNotifier {
         notify.update('nocourier:$id', 'لا يوجد موصّل متاح · طلب ${o['no'] ?? ''}',
             'سيُعرض تلقائياً على أول موصّل يتصل.', 'order:$id');
       }
+    }
+    // أُلغي طلب كان جديداً أو قيد التحضير (ألغاه الزبون أو الإدارة)
+    for (final o in orders) {
+      final id = '${o['id']}', st = '${o['status'] ?? ''}', was = _statusSeen[id];
+      _statusSeen[id] = st;
+      if (first || was == null || st != 'cancelled' || !['new', 'prep', 'ready'].contains(was)) continue;
+      final title = 'أُلغي الطلب ${o['no'] ?? ''}';
+      final body = was == 'new' ? 'ألغاه الزبون قبل أن تقبله.' : 'أوقف تحضيره ولا تسلّمه لأي موصّل.';
+      toast('$title · $body');
+      _beep();
+      notify.update('cancel:$id', title, body, 'order:$id');
     }
     // الموصّل وصل إلى المحل
     for (final o in orders) {
@@ -535,8 +562,9 @@ class ShopState extends ChangeNotifier {
   // ---------------- order actions ----------------
   Future<bool> setStatus(String id, String status, String okMsg, [Map<String, dynamic>? extra]) async {
     try {
-      await fs.collection('orders').doc(id).update({'status': status, 'updatedAt': FieldValue.serverTimestamp(), ...?extra});
-      toast(okMsg);
+      final sent = await queued(
+          fs.collection('orders').doc(id).update({'status': status, 'updatedAt': FieldValue.serverTimestamp(), ...?extra}));
+      toast(sent ? okMsg : '$okMsg · $pendingNote');
       return true;
     } catch (e) {
       toast(errText(e));
@@ -566,8 +594,9 @@ class ShopState extends ChangeNotifier {
     }
     final base = math.max(asInt(o['prepAt'] ?? nowMs()), left < 0 ? nowMs() - _prepMs() : 0);
     try {
-      await fs.collection('orders').doc(o['id']).update({'prepAt': base + 10 * 60000, 'updatedAt': FieldValue.serverTimestamp()});
-      toast('أُبلغ الزبون أن طلبه يحتاج 10 دقائق إضافية');
+      final sent = await queued(
+          fs.collection('orders').doc(o['id']).update({'prepAt': base + 10 * 60000, 'updatedAt': FieldValue.serverTimestamp()}));
+      toast(sent ? 'أُبلغ الزبون أن طلبه يحتاج 10 دقائق إضافية' : 'سيُبلَّغ الزبون عند عودة الاتصال');
       return true;
     } catch (e) {
       toast(errText(e));
@@ -588,8 +617,9 @@ class ShopState extends ChangeNotifier {
     if (s == null) return;
     final v = s['open'] != true;
     try {
-      await fs.collection('shops').doc(shopId).update({'open': v});
-      toast(v ? 'محلك مفتوح ويستقبل الطلبات' : 'محلك مغلق الآن');
+      final sent = await queued(fs.collection('shops').doc(shopId).update({'open': v}));
+      final msg = v ? 'محلك مفتوح ويستقبل الطلبات' : 'محلك مغلق الآن';
+      toast(sent ? msg : '$msg · $pendingNote');
     } catch (e) {
       toast(errText(e));
     }
@@ -706,7 +736,9 @@ class ShopState extends ChangeNotifier {
 
   Future<void> toggleProduct(Doc p) async {
     try {
-      await fs.collection('products').doc(p['id']).update({'available': p['available'] != true});
+      if (!await queued(fs.collection('products').doc(p['id']).update({'available': p['available'] != true}))) {
+        toast(pendingNote);
+      }
     } catch (e) {
       toast(errText(e));
     }
