@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../store.dart';
 import '../ui.dart';
+import 'posts.dart';
 import 'shell.dart';
 
 class CouponsScreen extends StatefulWidget {
@@ -71,6 +72,28 @@ class _CouponsScreenState extends State<CouponsScreen> {
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 14, 16, 30),
             child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+              // يوميات وإعلانات المحل
+              Box(
+                color: orange.withValues(alpha: 0.10),
+                onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const PostsScreen())),
+                child: Row(children: [
+                  const CircleAvatar(backgroundColor: orange, child: Icon(Icons.auto_stories_rounded, color: Colors.white)),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      const Text('يومياتي وإعلاناتي', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
+                      Text(
+                        app.posts.isEmpty
+                            ? 'انشر صورة طبق اليوم أو عرضاً ليراه زبائنك'
+                            : 'منشوراتك النشطة الآن: ${app.posts.length}',
+                        style: TextStyle(color: hint, fontSize: 13),
+                      ),
+                    ]),
+                  ),
+                  const Icon(Icons.chevron_left_rounded),
+                ]),
+              ),
+              const SizedBox(height: 16),
               Text('أنشئ رمز خصم لزبائنك. يظهر عرضك في الصفحة الرئيسية وعلى بطاقة محلك، وقيمة الخصم تُخصم من مستحقك.',
                   style: TextStyle(color: hint, fontSize: 13)),
               const SizedBox(height: 12),

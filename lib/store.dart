@@ -734,6 +734,87 @@ class ShopState extends ChangeNotifier {
     }
   }
 
+  // ---------------- يوميات وإعلانات المحل ----------------
+  // تُحفظ في مستند المحل نفسه (الحقل posts) فيراها الزبون فوراً مع بقية بيانات المحل،
+  // وصورها في مجموعة images مثل صور المنتجات (المعرّف post_…).
+  static const maxPosts = 12;
+
+  /// المنشورات التي لم تنتهِ، الأحدث أولاً
+  List<Doc> get posts {
+    final now = nowMs();
+    final l = (shop?['posts'] is List ? shop!['posts'] as List : const [])
+        .whereType<Map>()
+        .map((m) => Map<String, dynamic>.from(m))
+        .where((p) => asInt(p['until']) > now)
+        .toList();
+    l.sort((a, b) => asInt(b['at']).compareTo(asInt(a['at'])));
+    return l;
+  }
+
+  String? postImage(Doc p) => p['img'] == true ? image('${p['id']}', true, p['at']) : null;
+
+  /// kind: story (يومية تختفي بعد 24 ساعة) أو ad (إعلان لعدة أيام). يرجع رسالة خطأ أو ''.
+  Future<String> addPost({required String kind, required String text, String? img, int days = 1}) async {
+    final s = shop;
+    if (s == null) return 'المحل غير موجود.';
+    final t = text.trim();
+    if (t.isEmpty && (img == null || img.isEmpty)) return kind == 'story' ? 'أضف صورة أو اكتب شيئاً.' : 'اكتب نص الإعلان.';
+    if (t.length > 300) return 'النص طويل. أقصى حد 300 حرف.';
+    final live = posts;
+    if (live.length >= maxPosts) return 'عندك $maxPosts منشورات نشطة. احذف واحداً أولاً.';
+    final now = nowMs();
+    final id = 'post_${now}_${s['id']}';
+    final hasImg = img != null && img.isNotEmpty;
+    final post = <String, dynamic>{
+      'id': id,
+      'kind': kind,
+      'text': t,
+      'img': hasImg,
+      'at': now,
+      'until': now + (kind == 'story' ? 1 : days.clamp(1, 30)) * 86400000,
+    };
+    final b = fs.batch();
+    if (hasImg) {
+      b.set(fs.collection('images').doc(id), {'shopId': s['id'], 'data': img});
+      images['$id:$now'] = img;
+    }
+    // نحذف صور المنشورات المنتهية مع كل نشر جديد
+    for (final old in _allPosts(s).where((p) => asInt(p['until']) <= now && p['img'] == true)) {
+      b.delete(fs.collection('images').doc('${old['id']}'));
+    }
+    b.update(fs.collection('shops').doc(s['id']), {'posts': [post, ...live]});
+    try {
+      final sent = await queued(b.commit());
+      toast(sent
+          ? (kind == 'story' ? 'نُشرت يوميتك · تختفي بعد 24 ساعة' : 'نُشر إعلانك ويظهر في صفحة محلك')
+          : 'سيُنشر $pendingNote');
+      return '';
+    } catch (e) {
+      return _postErr(e);
+    }
+  }
+
+  Future<void> deletePost(Doc p) async {
+    final s = shop;
+    if (s == null) return;
+    final b = fs.batch();
+    b.update(fs.collection('shops').doc(s['id']), {'posts': posts.where((x) => x['id'] != p['id']).toList()});
+    if (p['img'] == true) b.delete(fs.collection('images').doc('${p['id']}'));
+    try {
+      await queued(b.commit());
+      toast('حُذف المنشور');
+    } catch (e) {
+      toast(_postErr(e));
+    }
+  }
+
+  List<Doc> _allPosts(Doc s) =>
+      (s['posts'] is List ? s['posts'] as List : const []).whereType<Map>().map((m) => Map<String, dynamic>.from(m)).toList();
+
+  String _postErr(Object e) => e is FirebaseException && e.code == 'permission-denied'
+      ? 'قواعد حماية Firestore لا تسمح بعد بالنشر. يجب السماح للمحل بتعديل الحقل posts في مستند محله.'
+      : errText(e);
+
   Future<void> toggleProduct(Doc p) async {
     try {
       if (!await queued(fs.collection('products').doc(p['id']).update({'available': p['available'] != true}))) {
