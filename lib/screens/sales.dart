@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../store.dart';
 import '../ui.dart';
+import 'reviews.dart';
 import 'shell.dart';
 
 const _weekdayShort = ['إثن', 'ثلا', 'أرب', 'خمي', 'جمع', 'سبت', 'أحد'];
@@ -96,6 +97,34 @@ class SalesScreen extends StatelessWidget {
                     icon: Icons.account_balance_wallet_rounded,
                   ),
                 ],
+                const SizedBox(height: 12),
+                Box(
+                  onTap: () => Navigator.of(context).push(MaterialPageRoute(
+                    builder: (_) => ReviewsScreen(
+                      title: 'آراء زبائن محلك',
+                      load: app.loadReviews,
+                      starKey: 'shop',
+                      barLight: const Color(0xFF1E8A66),
+                      barDark: const Color(0xFF2FA67A),
+                    ),
+                  )),
+                  child: Row(children: [
+                    const Icon(Icons.reviews_rounded, color: star, size: 30),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        const Text('آراء الزبائن', style: TextStyle(fontWeight: FontWeight.w700)),
+                        Text(
+                          asInt(app.shop?['ratingCount']) > 0
+                              ? 'تقييمك ${(asInt(app.shop?['ratingSum']) / asInt(app.shop?['ratingCount'])).toStringAsFixed(1)} من ${asInt(app.shop?['ratingCount'])} تقييماً · اقرأ تعليقاتهم'
+                              : 'لا تقييمات بعد',
+                          style: TextStyle(color: hint, fontSize: 13),
+                        ),
+                      ]),
+                    ),
+                    const Icon(Icons.chevron_left_rounded),
+                  ]),
+                ),
                 const SizedBox(height: 18),
                 Text('الأكثر طلباً في آخر 30 يوماً', style: theme.textTheme.titleMedium),
                 const SizedBox(height: 8),

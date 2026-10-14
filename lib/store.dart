@@ -815,6 +815,18 @@ class ShopState extends ChangeNotifier {
       ? 'قواعد حماية Firestore لا تسمح بعد بالنشر. يجب السماح للمحل بتعديل الحقل posts في مستند محله.'
       : errText(e);
 
+
+  /// آراء الزبائن (مجموعة reviews التي يكتبها تطبيق الزبون بعد كل طلب)، الأحدث أولاً
+  Future<List<Doc>> loadReviews() async {
+    final s = await fs.collection('reviews').where('shopId', isEqualTo: shopId).limit(120).get();
+    final l = s.docs.map((d) => <String, dynamic>{...d.data(), 'id': d.id}).where((r) => asInt(r['shop']) > 0).toList();
+    for (final r in l) {
+      r['createdAtMs'] = msOf(r['createdAt']);
+    }
+    l.sort((a, b) => asInt(b['createdAtMs']).compareTo(asInt(a['createdAtMs'])));
+    return l.take(60).toList();
+  }
+
   Future<void> toggleProduct(Doc p) async {
     try {
       if (!await queued(fs.collection('products').doc(p['id']).update({'available': p['available'] != true}))) {
