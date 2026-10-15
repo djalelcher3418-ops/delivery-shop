@@ -3,7 +3,12 @@ import 'package:url_launcher/url_launcher.dart';
 
 import 'store.dart';
 
-const brand = Color(0xFF0F6B4F);
+// ألوان التصميم الجديد: أخضر نعناعي + أبيض + أسود
+const brand = Color(0xFF4E9F82);
+const brandDark = Color(0xFF2E7A5F);
+const mint = Color(0xFFDCEFE7);
+const mintSoft = Color(0xFFEEF7F3);
+const ink = Color(0xFF161817);
 const orange = Color(0xFFE8890C);
 const star = Color(0xFFF2A516);
 const info = Color(0xFF1D4E89);
@@ -12,12 +17,12 @@ const warn = Color(0xFFB45309);
 const shopGradient = LinearGradient(
   begin: Alignment.topRight,
   end: Alignment.bottomLeft,
-  colors: [Color(0xFF0F6B4F), Color(0xFF0B5640), Color(0xFF084532)],
+  colors: [Color(0xFF66B496), Color(0xFF4E9F82), Color(0xFF3A8A6D)],
 );
 
 List<BoxShadow> softShadow(BuildContext context) => Theme.of(context).brightness == Brightness.dark
     ? const []
-    : [BoxShadow(color: const Color(0xFF14201B).withValues(alpha: 0.07), blurRadius: 16, offset: const Offset(0, 4))];
+    : [BoxShadow(color: const Color(0xFF1E4D3C).withValues(alpha: 0.08), blurRadius: 22, offset: const Offset(0, 8))];
 
 class Box extends StatelessWidget {
   final Widget child;
@@ -33,7 +38,7 @@ class Box extends StatelessWidget {
       padding: padding,
       decoration: BoxDecoration(
         color: color ?? Theme.of(context).colorScheme.surface,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(22),
         border: border,
         boxShadow: softShadow(context),
       ),
@@ -42,7 +47,7 @@ class Box extends StatelessWidget {
     if (onTap == null) return c;
     return Material(
       color: Colors.transparent,
-      child: InkWell(borderRadius: BorderRadius.circular(18), onTap: onTap, child: c),
+      child: InkWell(borderRadius: BorderRadius.circular(22), onTap: onTap, child: c),
     );
   }
 }
@@ -51,14 +56,14 @@ class Pill extends StatelessWidget {
   final String text;
   final Color bg, fg;
   final IconData? icon;
-  const Pill(this.text, {super.key, this.bg = const Color(0xFFEEF2F0), this.fg = const Color(0xFF56625C), this.icon});
+  const Pill(this.text, {super.key, this.bg = const Color(0xFFEAF4EF), this.fg = const Color(0xFF3F5A4F), this.icon});
 
   @override
   Widget build(BuildContext context) {
     final dark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
-      decoration: BoxDecoration(color: dark ? fg.withValues(alpha: 0.22) : bg, borderRadius: BorderRadius.circular(9)),
+      decoration: BoxDecoration(color: dark ? fg.withValues(alpha: 0.22) : bg, borderRadius: BorderRadius.circular(20)),
       child: Row(mainAxisSize: MainAxisSize.min, children: [
         if (icon != null) ...[Icon(icon, size: 14, color: dark ? Colors.white70 : fg), const SizedBox(width: 4)],
         Text(text, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: dark ? Colors.white : fg)),
@@ -174,4 +179,81 @@ Future<bool> confirm(BuildContext context, String title, String body, String ok)
     ),
   );
   return r == true;
+}
+
+class BarItem {
+  final IconData icon, active;
+  final String label;
+  final String? badge;
+  const BarItem(this.icon, this.active, this.label, {this.badge});
+}
+
+/// شريط سفلي أبيض مدوّر (مثل تطبيق الزبون): الأيقونة المختارة داخل دائرة خضراء مرفوعة
+class BottomBar extends StatelessWidget {
+  final int index;
+  final List<BarItem> items;
+  final ValueChanged<int> onTap;
+  const BottomBar({super.key, required this.index, required this.items, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final hint = Theme.of(context).hintColor;
+    return Container(
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+        boxShadow: dark ? const [] : [BoxShadow(color: const Color(0xFF1E4D3C).withValues(alpha: 0.10), blurRadius: 24, offset: const Offset(0, -4))],
+      ),
+      child: SafeArea(
+        top: false,
+        child: SizedBox(
+          height: 72,
+          child: Row(children: [
+            for (int k = 0; k < items.length; k++)
+              Expanded(
+                child: Semantics(
+                  selected: k == index,
+                  button: true,
+                  label: items[k].label,
+                  child: InkResponse(
+                    onTap: () => onTap(k),
+                    radius: 36,
+                    child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+                      AnimatedContainer(
+                        duration: const Duration(milliseconds: 220),
+                        curve: Curves.easeOut,
+                        width: k == index ? 46 : 40,
+                        height: k == index ? 46 : 40,
+                        transform: Matrix4.translationValues(0, k == index ? -6 : 0, 0),
+                        decoration: BoxDecoration(
+                          color: k == index ? brand : Colors.transparent,
+                          shape: BoxShape.circle,
+                          boxShadow: k == index ? [BoxShadow(color: brand.withValues(alpha: 0.35), blurRadius: 12, offset: const Offset(0, 5))] : null,
+                        ),
+                        child: Badge(
+                          isLabelVisible: items[k].badge != null,
+                          label: Text(items[k].badge ?? ''),
+                          child: Icon(k == index ? items[k].active : items[k].icon, color: k == index ? Colors.white : hint, size: 24),
+                        ),
+                      ),
+                      AnimatedDefaultTextStyle(
+                        duration: const Duration(milliseconds: 220),
+                        style: TextStyle(
+                          fontFamily: Theme.of(context).textTheme.bodySmall?.fontFamily,
+                          fontSize: 11.5,
+                          fontWeight: k == index ? FontWeight.w700 : FontWeight.w500,
+                          color: k == index ? brand : hint,
+                        ),
+                        child: Text(items[k].label, maxLines: 1),
+                      ),
+                    ]),
+                  ),
+                ),
+              ),
+          ]),
+        ),
+      ),
+    );
+  }
 }
