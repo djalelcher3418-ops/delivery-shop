@@ -20,6 +20,9 @@ dependencies:
   audioplayers: any
   flutter_local_notifications: '>=22.0.0 <23.0.0'
   image_picker: any
+  # قصّ خلفية صور المنتجات على الهاتف
+  google_mlkit_subject_segmentation: any
+  image: ^4.1.0
 
 dev_dependencies:
   flutter_launcher_icons: any
