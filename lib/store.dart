@@ -709,7 +709,11 @@ class ShopState extends ChangeNotifier {
       'sizes': sizes,
       'extras': extras,
     };
-    if (imgChanged) data['imgV'] = nowMs();
+    if (imgChanged) {
+      data['imgV'] = nowMs();
+      // صورة PNG = مقصوصة الخلفية: يعرضها تطبيق الزبون كاملة فوق دائرة خضراء
+      data['cut'] = (img ?? '').startsWith('data:image/png');
+    }
     if (editId == null) data['pos'] = nowMs();
     final b = fs.batch();
     if (editId != null) {

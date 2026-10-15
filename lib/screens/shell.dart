@@ -35,23 +35,15 @@ class _ShellState extends State<Shell> {
             const CouponsScreen(),
             SettingsScreen(key: ValueKey(app.shopId)),
           ]),
-          bottomNavigationBar: NavigationBar(
-            selectedIndex: tab,
-            onDestinationSelected: (i) => shopTab.value = i,
-            destinations: [
-              NavigationDestination(
-                icon: Badge(isLabelVisible: n > 0, label: Text('$n'), child: const Icon(Icons.receipt_long_outlined)),
-                selectedIcon: Badge(isLabelVisible: n > 0, label: Text('$n'), child: const Icon(Icons.receipt_long_rounded)),
-                label: 'الطلبات',
-              ),
-              const NavigationDestination(
-                  icon: Icon(Icons.bar_chart_outlined), selectedIcon: Icon(Icons.bar_chart_rounded), label: 'المبيعات'),
-              const NavigationDestination(
-                  icon: Icon(Icons.inventory_2_outlined), selectedIcon: Icon(Icons.inventory_2_rounded), label: 'منتجاتي'),
-              const NavigationDestination(
-                  icon: Icon(Icons.local_offer_outlined), selectedIcon: Icon(Icons.local_offer_rounded), label: 'العروض'),
-              const NavigationDestination(
-                  icon: Icon(Icons.settings_outlined), selectedIcon: Icon(Icons.settings_rounded), label: 'الإعدادات'),
+          bottomNavigationBar: BottomBar(
+            index: tab,
+            onTap: (i) => shopTab.value = i,
+            items: [
+              BarItem(Icons.receipt_long_outlined, Icons.receipt_long_rounded, 'الطلبات', badge: n > 0 ? '$n' : null),
+              const BarItem(Icons.bar_chart_outlined, Icons.bar_chart_rounded, 'المبيعات'),
+              const BarItem(Icons.inventory_2_outlined, Icons.inventory_2_rounded, 'منتجاتي'),
+              const BarItem(Icons.local_offer_outlined, Icons.local_offer_rounded, 'العروض'),
+              const BarItem(Icons.settings_outlined, Icons.settings_rounded, 'الإعدادات'),
             ],
           ),
         );
@@ -99,7 +91,7 @@ class ShopHeader extends StatelessWidget {
             child: Switch(
               value: open,
               activeThumbColor: Colors.white,
-              activeTrackColor: const Color(0xFF3DBB8C),
+              activeTrackColor: ink,
               onChanged: (_) => app.toggleOpen(),
             ),
           ),

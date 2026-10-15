@@ -49,14 +49,14 @@ Future<void> main() async {
 ThemeData buildTheme(Brightness b) {
   final dark = b == Brightness.dark;
   final scheme = ColorScheme.fromSeed(seedColor: brand, brightness: b).copyWith(
-    primary: dark ? const Color(0xFF3DBB8C) : brand,
+    primary: dark ? const Color(0xFF6CC7A5) : brand,
     secondary: orange,
     surface: dark ? const Color(0xFF161D26) : Colors.white,
   );
   final base = ThemeData(useMaterial3: true, colorScheme: scheme, brightness: b);
   final text = base.textTheme.apply(fontFamily: GoogleFonts.getFont('IBM Plex Sans Arabic').fontFamily);
   return base.copyWith(
-    scaffoldBackgroundColor: dark ? const Color(0xFF0E131A) : const Color(0xFFF3F5F8),
+    scaffoldBackgroundColor: dark ? const Color(0xFF0E131A) : const Color(0xFFF5FAF7),
     textTheme: text.copyWith(
       headlineSmall: GoogleFonts.getFont('Readex Pro', textStyle: text.headlineSmall, fontWeight: FontWeight.w600),
       titleLarge: GoogleFonts.getFont('Readex Pro', textStyle: text.titleLarge, fontWeight: FontWeight.w600),
@@ -66,20 +66,32 @@ ThemeData buildTheme(Brightness b) {
       filled: true,
       fillColor: scheme.surface,
       contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-      border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide(color: scheme.outlineVariant)),
-      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide(color: scheme.outlineVariant)),
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(18), borderSide: BorderSide(color: scheme.outlineVariant)),
+      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(18), borderSide: BorderSide(color: scheme.outlineVariant)),
     ),
+    // الأزرار الرئيسية سوداء بشكل كبسولة مثل تطبيق الزبون
     filledButtonTheme: FilledButtonThemeData(
       style: FilledButton.styleFrom(
+        backgroundColor: dark ? const Color(0xFF6CC7A5) : ink,
+        foregroundColor: dark ? const Color(0xFF0E131A) : Colors.white,
+        disabledBackgroundColor: dark ? Colors.white12 : const Color(0xFFD5DDD9),
         minimumSize: const Size.fromHeight(54),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        shape: const StadiumBorder(),
         textStyle: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
       ),
+    ),
+    chipTheme: base.chipTheme.copyWith(
+      shape: const StadiumBorder(),
+      side: BorderSide(color: dark ? Colors.white24 : const Color(0xFFDCE7E2)),
+      selectedColor: brand.withValues(alpha: dark ? 0.35 : 0.16),
+    ),
+    bottomSheetTheme: const BottomSheetThemeData(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(30))),
     ),
     outlinedButtonTheme: OutlinedButtonThemeData(
       style: OutlinedButton.styleFrom(
         minimumSize: const Size(0, 48),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        shape: const StadiumBorder(),
       ),
     ),
     snackBarTheme: SnackBarThemeData(shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14))),
