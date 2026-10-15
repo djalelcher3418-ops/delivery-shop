@@ -24,6 +24,9 @@ s = re.sub(r'android:label="[^"]*"', 'android:label="Delivery محل"', s, count
 if 'android:showWhenLocked' not in s:
     s = s.replace('android:name=".MainActivity"',
                   'android:name=".MainActivity"\n            android:showWhenLocked="true"\n            android:turnScreenOn="true"', 1)
+# أداة قصّ خلفية صور المنتجات (ML Kit): تنزّل مع التطبيق بدل أول استعمال
+if 'com.google.mlkit.vision.DEPENDENCIES' not in s:
+    s = s.replace('</application>', '        <meta-data android:name="com.google.mlkit.vision.DEPENDENCIES" android:value="subject_segment"/>\n    </application>', 1)
 tel = '<intent><action android:name="android.intent.action.DIAL"/><data android:scheme="tel"/></intent>'
 if '<queries>' in s:
     s = s.replace('<queries>', '<queries>\n        ' + tel, 1)
