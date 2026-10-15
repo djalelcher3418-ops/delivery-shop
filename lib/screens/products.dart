@@ -3,12 +3,13 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
+import '../cutout.dart';
 import '../store.dart';
 import '../ui.dart';
 import 'shell.dart';
 
 /// يصوّر أو يختار صورة ويصغّرها مثل الموقع، ويرجعها data URL (أو null إذا ألغى)
-Future<String?> pickImage(BuildContext context, {double max = 480, int limit = 200000}) async {
+Future<String?> pickImage(BuildContext context, {double max = 480, int limit = 200000, bool offerCut = false}) async {
   final src = await showModalBottomSheet<ImageSource>(
     context: context,
     showDragHandle: true,
@@ -32,10 +33,101 @@ Future<String?> pickImage(BuildContext context, {double max = 480, int limit = 2
     final f = await ImagePicker().pickImage(source: src, maxWidth: max, maxHeight: max, imageQuality: q);
     if (f == null) return null;
     final data = 'data:image/jpeg;base64,${base64Encode(await f.readAsBytes())}';
-    if (data.length <= limit || q == 40) return data;
-    if (src == ImageSource.camera) return data; // لا نطلب التصوير مرة ثانية
+    // لا نطلب التصوير مرة ثانية
+    if (data.length <= limit || q == 40 || src == ImageSource.camera) {
+      if (!offerCut || !context.mounted) return data;
+      final chosen = await showDialog<String>(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => _CutDialog(path: f.path, original: data),
+      );
+      return chosen ?? data;
+    }
   }
   return null;
+}
+
+/// يقصّ خلفية صورة المنتج ويعرض الصورتين ليختار صاحب المحل
+class _CutDialog extends StatefulWidget {
+  final String path, original;
+  const _CutDialog({required this.path, required this.original});
+  @override
+  State<_CutDialog> createState() => _CutDialogState();
+}
+
+class _CutDialogState extends State<_CutDialog> {
+  String? cut;
+  String err = '';
+
+  @override
+  void initState() {
+    super.initState();
+    cutBackground(widget.path).then((d) {
+      if (mounted) setState(() => cut = d);
+    }).catchError((Object e) {
+      if (mounted) setState(() => err = e is String ? e : 'تعذّر قصّ الخلفية.');
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final hint = Theme.of(context).hintColor;
+    final busy = cut == null && err.isEmpty;
+    return AlertDialog(
+      title: const Text('قصّ خلفية الصورة'),
+      content: Column(mainAxisSize: MainAxisSize.min, children: [
+        Row(children: [
+          Expanded(
+            child: Column(children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(16),
+                child: AspectRatio(aspectRatio: 1, child: Image.memory(dataUrlBytes(widget.original)!, fit: BoxFit.cover)),
+              ),
+              const SizedBox(height: 6),
+              Text('الأصلية', style: TextStyle(color: hint, fontSize: 13)),
+            ]),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(children: [
+              AspectRatio(
+                aspectRatio: 1,
+                child: Container(
+                  decoration: const BoxDecoration(color: mint, shape: BoxShape.circle),
+                  alignment: Alignment.center,
+                  child: cut != null
+                      ? Image.memory(dataUrlBytes(cut)!, fit: BoxFit.contain)
+                      : busy
+                          ? const SizedBox(width: 28, height: 28, child: CircularProgressIndicator(strokeWidth: 3))
+                          : Icon(Icons.hide_image_outlined, color: hint, size: 34),
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text('بدون خلفية', style: TextStyle(color: hint, fontSize: 13)),
+            ]),
+          ),
+        ]),
+        const SizedBox(height: 12),
+        Text(
+          busy
+              ? 'نقصّ الخلفية… لحظة'
+              : err.isNotEmpty
+                  ? err
+                  : 'الصورة بدون خلفية تظهر أجمل في التطبيق فوق دائرة خضراء.',
+          style: TextStyle(fontSize: 13, color: err.isNotEmpty ? const Color(0xFF8A3414) : hint),
+          textAlign: TextAlign.center,
+        ),
+      ]),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context, widget.original), child: const Text('أبقِ الأصلية')),
+        FilledButton(
+          style: FilledButton.styleFrom(minimumSize: const Size(0, 44)),
+          onPressed: cut == null ? null : () => Navigator.pop(context, cut),
+          child: const Text('استعمل بدون خلفية'),
+        ),
+      ],
+    );
+  }
 }
 
 class Thumb64 extends StatelessWidget {
@@ -47,6 +139,15 @@ class Thumb64 extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final bytes = dataUrlBytes(data);
+    if (bytes != null && '$data'.startsWith('data:image/png')) {
+      // صورة بدون خلفية فوق دائرة خضراء
+      return Container(
+        width: size,
+        height: size,
+        decoration: const BoxDecoration(color: mint, shape: BoxShape.circle),
+        child: Image.memory(bytes, fit: BoxFit.contain, gaplessPlayback: true),
+      );
+    }
     return ClipRRect(
       borderRadius: BorderRadius.circular(14),
       child: Container(
@@ -289,18 +390,28 @@ class _ProductEditScreenState extends State<ProductEditScreen> {
             InkWell(
               borderRadius: BorderRadius.circular(18),
               onTap: () async {
-                final d = await pickImage(context);
+                final d = await pickImage(context, offerCut: true);
                 if (d != null) setState(() => img = d);
               },
               child: Container(
-                height: 180,
+                height: 200,
                 decoration: BoxDecoration(
                   color: Theme.of(context).colorScheme.surfaceContainerHighest,
                   borderRadius: BorderRadius.circular(18),
                 ),
                 clipBehavior: Clip.antiAlias,
                 child: dataUrlBytes(shown) != null
-                    ? Image.memory(dataUrlBytes(shown)!, fit: BoxFit.cover, width: double.infinity)
+                    ? ('$shown'.startsWith('data:image/png')
+                        // صورة بدون خلفية: كما ستظهر للزبون فوق دائرة خضراء
+                        ? Center(
+                            child: Container(
+                              width: 184,
+                              height: 184,
+                              decoration: const BoxDecoration(color: mint, shape: BoxShape.circle),
+                              child: Image.memory(dataUrlBytes(shown)!, fit: BoxFit.contain),
+                            ),
+                          )
+                        : Image.memory(dataUrlBytes(shown)!, fit: BoxFit.cover, width: double.infinity))
                     : Column(mainAxisAlignment: MainAxisAlignment.center, children: [
                         Icon(Icons.add_a_photo_rounded, size: 40, color: hint),
                         const SizedBox(height: 6),
