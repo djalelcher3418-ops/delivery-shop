@@ -73,18 +73,20 @@ class SalesScreen extends StatelessWidget {
         final best = top.entries.toList()..sort((a, b) => b.value.qty.compareTo(a.value.qty));
         final pending = app.orders.where((o) => o['status'] == 'done' && o['settled'] == false).toList();
 
-        // الزبائن: من طلب في آخر 30 يوماً، وهل كانت تلك أول مرة يطلب فيها من المحل
-        final firstAt = <String, int>{};
+        // الزبائن: من طلب في آخر 30 يوماً. نعرّفه برقم هاتفه لأن حسابه في تطبيق الزبون مجهول
+        // ويتغير إذا أعاد تثبيت التطبيق. «عاد للطلب» = له طلبان مسلّمان أو أكثر (أحدهما في المدة).
+        final total = <String, int>{};
         final active = <String>{};
         for (final o in app.orders) {
-          final uid = '${o['customerUid'] ?? ''}';
-          if (uid.isEmpty || !_sold(o)) continue;
-          final at = asInt(o['createdAtMs']);
-          firstAt[uid] = firstAt.containsKey(uid) ? (at < firstAt[uid]! ? at : firstAt[uid]!) : at;
-          if (at >= t30) active.add(uid);
+          if (!_sold(o)) continue;
+          final phone = latinDigits('${o['phone'] ?? ''}').replaceAll(RegExp(r'\D'), '');
+          final key = phone.length >= 9 ? phone : '${o['customerUid'] ?? ''}';
+          if (key.isEmpty) continue;
+          total[key] = (total[key] ?? 0) + 1;
+          if (asInt(o['createdAtMs']) >= t30) active.add(key);
         }
-        final newCust = active.where((u) => firstAt[u]! >= t30).length;
-        final returning = active.length - newCust;
+        final returning = active.where((k) => total[k]! >= 2).length;
+        final newCust = active.length - returning;
 
         return ListView(padding: EdgeInsets.zero, children: [
           const ShopHeader(title: 'المبيعات'),

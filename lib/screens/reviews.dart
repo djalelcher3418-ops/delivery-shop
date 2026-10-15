@@ -47,11 +47,21 @@ class _ReviewsScreenState extends State<ReviewsScreen> {
 
   static String _date(int ms) {
     final d = DateTime.fromMillisecondsSinceEpoch(ms);
-    final days = DateTime.now().difference(d).inDays;
-    if (days == 0) return 'اليوم';
+    final now = DateTime.now();
+    // أيام تقويمية، لا كتل 24 ساعة
+    final days = DateTime(now.year, now.month, now.day).difference(DateTime(d.year, d.month, d.day)).inDays;
+    if (days <= 0) return 'اليوم';
     if (days == 1) return 'أمس';
-    if (days < 7) return 'منذ $days أيام';
+    if (days == 2) return 'منذ يومين';
+    if (days <= 10) return 'منذ $days أيام';
     return '${d.day}/${d.month}/${d.year}';
+  }
+
+  static String _reviewsText(int n) {
+    if (n == 1) return 'رأي واحد';
+    if (n == 2) return 'رأيين';
+    if (n <= 10) return '$n آراء';
+    return '$n رأياً';
   }
 
   Widget _stars(int n, {double size = 16}) => Row(mainAxisSize: MainAxisSize.min, children: [
@@ -78,9 +88,9 @@ class _ReviewsScreenState extends State<ReviewsScreen> {
           else ...[
             _summary(context, l),
             const SizedBox(height: 18),
-            Text('آخر الآراء', style: theme.textTheme.titleMedium),
+            Text(l.length > 60 ? 'آخر 60 رأياً' : 'آخر الآراء', style: theme.textTheme.titleMedium),
             const SizedBox(height: 8),
-            for (final r in l)
+            for (final r in l.take(60))
               Padding(
                 padding: const EdgeInsets.only(bottom: 10),
                 child: Box(
@@ -124,7 +134,7 @@ class _ReviewsScreenState extends State<ReviewsScreen> {
           Text(avg.toStringAsFixed(1), style: const TextStyle(fontSize: 34, fontWeight: FontWeight.w800)),
           _stars(avg.round(), size: 14),
           const SizedBox(height: 2),
-          Text('من ${l.length} رأياً', style: TextStyle(color: hint, fontSize: 12)),
+          Text('من ${_reviewsText(l.length)}', style: TextStyle(color: hint, fontSize: 12)),
         ]),
         const SizedBox(width: 18),
         Expanded(

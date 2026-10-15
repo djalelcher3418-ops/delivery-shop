@@ -110,7 +110,10 @@ class AppStatus extends ChangeNotifier {
       rq.headers.set('Accept', 'application/vnd.github+json');
       rq.headers.set('User-Agent', 'delivery-dz');
       final rs = await rq.close().timeout(const Duration(seconds: 12));
-      if (rs.statusCode != 200) return;
+      if (rs.statusCode != 200) {
+        c.close();
+        return;
+      }
       final j = jsonDecode(await rs.transform(utf8.decoder).join()) as Map;
       final n = int.tryParse('${j['tag_name']}'.replaceFirst('build-', '')) ?? 0;
       final apk = (j['assets'] as List? ?? const []).cast<Map>().where((a) => '${a['name']}'.endsWith('.apk'));
@@ -136,45 +139,47 @@ class StatusBars extends StatelessWidget {
       builder: (context, _) {
         final showUpdate = status.newBuild != null && !status.updateDismissed;
         final showBattery = status.showBattery;
-        if (!status.offline && !showUpdate && !showBattery) return child;
-        // الشريطان يدفعان الصفحة إلى الأسفل بدل أن يغطّيا رأسها (وفيه مفاتيح مهمة)
+        final any = status.offline || showUpdate || showBattery;
+        // الأشرطة تدفع الصفحة إلى الأسفل بدل أن تغطّي رأسها (وفيه مفاتيح مهمة).
+        // البنية نفسها دائماً (مع أشرطة أو بدونها) حتى لا يُعاد بناء التطبيق كله عند ظهور شريط.
         final mq = MediaQuery.of(context);
         return ColoredBox(
           color: Theme.of(context).scaffoldBackgroundColor,
           child: Column(children: [
-            Padding(
-              padding: EdgeInsets.fromLTRB(12, mq.padding.top + 6, 12, 6),
-              child: Column(mainAxisSize: MainAxisSize.min, children: [
-                if (status.offline)
-                  const _Bar(
-                    color: Color(0xFF9A1C1C),
-                    icon: Icons.wifi_off_rounded,
-                    text: 'لا يوجد اتصال بالإنترنت · لن تصل الطلبات والتحديثات حتى يعود',
-                  ),
-                if (showBattery) ...[
-                  if (status.offline) const SizedBox(height: 6),
-                  _Bar(
-                    color: const Color(0xFF8A4B00),
-                    icon: Icons.battery_alert_rounded,
-                    text: 'اسمح للتطبيق بالعمل في الخلفية لتصلك التنبيهات والشاشة مطفأة',
-                    action: 'سماح',
-                    onAction: status.fixBattery,
-                    onClose: status.dismissBattery,
-                  ),
-                ],
-                if ((status.offline || showBattery) && showUpdate) const SizedBox(height: 6),
-                if (showUpdate)
-                  _Bar(
-                    color: const Color(0xFF1D4E89),
-                    icon: Icons.system_update_rounded,
-                    text: 'نسخة جديدة (${status.newBuild}) متاحة',
-                    action: 'تنزيل',
-                    onAction: () => launchUrl(Uri.parse(status.newUrl!), mode: LaunchMode.externalApplication),
-                    onClose: status.dismissUpdate,
-                  ),
-              ]),
-            ),
-            Expanded(child: MediaQuery.removePadding(context: context, removeTop: true, child: child)),
+            if (any)
+              Padding(
+                padding: EdgeInsets.fromLTRB(12, mq.padding.top + 6, 12, 6),
+                child: Column(mainAxisSize: MainAxisSize.min, children: [
+                  if (status.offline)
+                    const _Bar(
+                      color: Color(0xFF9A1C1C),
+                      icon: Icons.wifi_off_rounded,
+                      text: 'لا يوجد اتصال بالإنترنت · لن تصل الطلبات والتحديثات حتى يعود',
+                    ),
+                  if (showBattery) ...[
+                    if (status.offline) const SizedBox(height: 6),
+                    _Bar(
+                      color: const Color(0xFF8A4B00),
+                      icon: Icons.battery_alert_rounded,
+                      text: 'اسمح للتطبيق بالعمل في الخلفية لتصلك التنبيهات والشاشة مطفأة',
+                      action: 'سماح',
+                      onAction: status.fixBattery,
+                      onClose: status.dismissBattery,
+                    ),
+                  ],
+                  if ((status.offline || showBattery) && showUpdate) const SizedBox(height: 6),
+                  if (showUpdate)
+                    _Bar(
+                      color: const Color(0xFF1D4E89),
+                      icon: Icons.system_update_rounded,
+                      text: 'نسخة جديدة (${status.newBuild}) متاحة',
+                      action: 'تنزيل',
+                      onAction: () => launchUrl(Uri.parse(status.newUrl!), mode: LaunchMode.externalApplication),
+                      onClose: status.dismissUpdate,
+                    ),
+                ]),
+              ),
+            Expanded(child: MediaQuery.removePadding(context: context, removeTop: any, child: child)),
           ]),
         );
       },

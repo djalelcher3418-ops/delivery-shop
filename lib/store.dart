@@ -818,13 +818,13 @@ class ShopState extends ChangeNotifier {
 
   /// آراء الزبائن (مجموعة reviews التي يكتبها تطبيق الزبون بعد كل طلب)، الأحدث أولاً
   Future<List<Doc>> loadReviews() async {
-    final s = await fs.collection('reviews').where('shopId', isEqualTo: shopId).limit(120).get();
+    final s = await fs.collection('reviews').where('shopId', isEqualTo: shopId).get(); // كلها: بدون ترتيب في الاستعلام تكون limit عيّنة عشوائية
     final l = s.docs.map((d) => <String, dynamic>{...d.data(), 'id': d.id}).where((r) => asInt(r['shop']) > 0).toList();
     for (final r in l) {
       r['createdAtMs'] = msOf(r['createdAt']);
     }
     l.sort((a, b) => asInt(b['createdAtMs']).compareTo(asInt(a['createdAtMs'])));
-    return l.take(60).toList();
+    return l;
   }
 
   Future<void> toggleProduct(Doc p) async {
